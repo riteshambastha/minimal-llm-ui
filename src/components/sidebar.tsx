@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from 'react'; // Import useState
 import { cn } from "@/utils/cn";
 import { Cycle, motion } from "framer-motion";
 import { CopyIcon } from "./icons/copy-icon";
@@ -38,6 +39,9 @@ export default function Sidebar({
   menuState,
   toggleMenuState,
 }: Props) {
+  const [showConfirmation, setShowConfirmation] = useState(false);
+  const [conversationToDelete, setConversationToDelete] = useState(null);
+
   function loadConvo(conversation: { title: string; filePath: string }) {
     if (activeConversation == conversation.title) return;
     fetch("../api/fs/get-convo-by-path", {
@@ -53,20 +57,34 @@ export default function Sidebar({
     );
   }
 
-  function deleteConvo(conversation: { title: string; filePath: string }) {
-    fetch("../api/fs/delete-convo-by-path", {
-      method: "POST",
-      body: JSON.stringify({
-        conversationPath: conversation.filePath,
-      }),
-    }).then((response) => {
-      setConversations([
-        ...conversations.filter((c) => c.filePath !== conversation.filePath),
-      ]);
-      if (activeConversation == conversation.title) {
-        loadConvo(conversations[0]);
-      }
-    });
+  function handleDeleteConvo(conversation: { title: string; filePath: string }) {
+    setShowConfirmation(true);
+    setConversationToDelete(conversation);
+  }
+
+  function confirmDelete() {
+    if (conversationToDelete) {
+      fetch("../api/fs/delete-convo-by-path", {
+        method: "POST",
+        body: JSON.stringify({
+          conversationPath: conversationToDelete.filePath,
+        }),
+      }).then((response) => {
+        setConversations([
+          ...conversations.filter((c) => c.filePath !== conversationToDelete.filePath),
+        ]);
+        if (activeConversation == conversationToDelete.title) {
+          loadConvo(conversations[0]);
+        }
+      });
+    }
+    setShowConfirmation(false);
+    setConversationToDelete(null);
+  }
+
+  function cancelDelete() {
+    setShowConfirmation(false);
+    setConversationToDelete(null);
   }
 
   function startNewChat() {
@@ -85,6 +103,29 @@ export default function Sidebar({
       >
         <MenuToggle toggle={() => toggleMenuState()} />
       </motion.div>
+
+      {showConfirmation && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+          <div className="bg-white p-4 rounded-md">
+            <p className="text-sm mb-4">Are you sure you want to delete this conversation?</p>
+            <div className="flex justify-end">
+              <button
+                onClick={cancelDelete}
+                className="mr-2 px-4 py-2 rounded-md bg-gray-300 hover:bg-gray-400"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmDelete}
+                className="px-4 py-2 rounded-md bg-red-500 hover:bg-red-600 text-white"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <motion.div
         layout
         className={cn(
@@ -96,8 +137,8 @@ export default function Sidebar({
         {menuState && (
           <motion.button
             onClick={startNewChat}
-            whileTap={{ backgroundColor: "rgba(255,255,255,0.8)" }}
-            whileHover={{ backgroundColor: "rgba(255,255,255,1)" }}
+            whileTap={{ backgroundColor: "rgba(135, 27, 68,0.8)" }}
+            whileHover={{ backgroundColor: "rgba(135, 27, 68,1)" }}
             className="flex cursor-pointer items-center justify-between bg-white/80 px-4 py-2 text-black"
           >
             <span className="text-xs font-semibold">New Chat</span>
@@ -117,7 +158,10 @@ export default function Sidebar({
               <div className="flex items-center gap-2">
                 <CopyIcon className="h-4 w-4 fill-white/50 hover:fill-white/75" />
                 <TrashIcon
-                  onClick={() => deleteConvo(c)}
+                  onClick={(e) => {
+                    e.stopPropagation(); // Prevent click from loading the conversation
+                    handleDeleteConvo(c)
+                  }}
                   className="h-4 w-4 fill-white/50 hover:fill-white/75"
                 />
               </div>
